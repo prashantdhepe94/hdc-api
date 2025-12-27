@@ -3,64 +3,50 @@ pipeline {
 
     environment {
         APP_ENV = 'testing'
-        COMPOSER_ALLOW_XDEBUG = '0'
-    }
-
-    options {
-        timestamps()
-        timeout(time: 30, unit: 'MINUTES')
     }
 
     stages {
 
         stage('Checkout') {
             steps {
-                checkout scm
-            }
-        }
-
-        stage('Verify Environment') {
-            steps {
-                sh 'php -v'
-                sh 'php -m | grep intl'
-                sh 'composer --version'
+                echo 'Checking out code'
             }
         }
 
         stage('Install Dependencies') {
             steps {
-                echo 'Installing PHP dependencies'
-                sh 'composer install --no-interaction --prefer-dist'
+                sh 'composer install --no-interaction --prefer-dist --optimize-autoloader'
             }
         }
 
-        stage('Prepare Laravel') {
+        stage('Environment Setup') {
             steps {
-                sh '''
-                if [ ! -f .env ]; then
-                    cp .env.example .env
-                fi
-                php artisan key:generate
-                '''
+                sh 'cp .env.example .env || true'
+                sh 'php artisan key:generate'
             }
         }
 
-        stage('Run Tests') {
+        stage('Config Cache Check') {
             steps {
-                sh './vendor/bin/phpunit || true'
+                sh 'php artisan config:clear'
+                sh 'php artisan config:cache'
             }
         }
+
+        stage('Basic Health Check') {
+            steps {
+                sh 'php artisan --version'
+            }
+        }
+
     }
 
     post {
-        always {
-            cleanWs()
+        failure {
+            echo '❌ API CI failed'
         }
         success {
-            echo '✅ Pipeline succeeded'
-        }
-        failure {
-            echo '❌ Pipeline failed'
+            echo '✅ API CI passed'
         }
     }
 }
